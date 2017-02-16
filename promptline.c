@@ -5,13 +5,11 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
-#include "shell.h"
 
-size_t promptline(char * prompt, char * line, size_t sizline)
+size_t promptline(char * line, size_t sizline)
 {
     size_t n = 0;
 
-    write(STDOUT_FILENO, prompt, strlen(prompt));
     while (1)
     {
         n += read(0, (line + n), sizline - n);

@@ -11,19 +11,17 @@
 struct command
 {
     char * arguments[MAXARGS];
-    char cmdflag;
+    char is_in_piped;
+    char is_out_piped;
 };
-
-/*  cmdflag's  */
-#define OUTPIP  01
-#define INPIP   02
 
 extern struct command cmds[];
 extern char * infile, * outfile, * appfile;
 extern char bkgrnd;
+extern int signal_to_stop_process;
 
 int parseline(char *);
 
-size_t promptline(char *, char *, size_t);
+size_t promptline(char *, size_t);
 
 #endif //ASH_SHELL_H

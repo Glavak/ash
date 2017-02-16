@@ -25,11 +25,12 @@ int parseline(char * line)
     /* initialize  */
     bkgrnd = nargs = ncmds = rval = 0;
     s = line;
-    infile = outfile = appfile = (char *) NULL;
-    cmds[0].arguments[0] = (char *) NULL;
+    infile = outfile = appfile = NULL;
+    cmds[0].arguments[0] = NULL;
     for (i = 0; i < MAXCMDS; i++)
     {
-        cmds[i].cmdflag = 0;
+        cmds[i].is_in_piped = 0;
+        cmds[i].is_out_piped = 0;
     }
 
     while (*s)
@@ -91,8 +92,8 @@ int parseline(char * line)
                     fprintf(stderr, "syntax error\n");
                     return (-1);
                 }
-                cmds[ncmds++].cmdflag |= OUTPIP;
-                cmds[ncmds].cmdflag |= INPIP;
+                cmds[ncmds++].is_out_piped = 1;
+                cmds[ncmds].is_in_piped = 1;
                 *s++ = '\0';
                 nargs = 0;
                 break;
@@ -124,12 +125,12 @@ int parseline(char * line)
      *  no command on the right side of a pipe
          *  no command to the left of a pipe is checked above
      */
-    if (cmds[ncmds - 1].cmdflag & OUTPIP)
+    if (cmds[ncmds - 1].is_out_piped)
     {
         if (nargs == 0)
         {
             fprintf(stderr, "syntax error\n");
-            return (-1);
+            return -1;
         }
     }
 

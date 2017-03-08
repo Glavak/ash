@@ -7,6 +7,7 @@
 
 #define MAXARGS 256
 #define MAXCMDS 50
+#define MAXJOBS 128
 
 struct command
 {
@@ -15,10 +16,31 @@ struct command
     char is_out_piped;
 };
 
+struct job
+{
+    int index;
+    int pid;
+    int isStopped;
+};
+
+//void print_job(struct job job)
+//{
+//    if (WIFEXITED(job.status))
+//    {
+//        printf("Done. Status: %d\n", WEXITSTATUS(job.status));
+//    }
+//    else if (WIFSTOPPED(job.status))
+//    {
+//        printf("Stopped.\n");
+//        jobs[i].isStopped = 1;
+//    }
+//}
+
 extern struct command cmds[];
 extern char * infile, * outfile, * appfile;
 extern char bkgrnd;
-extern int signal_to_stop_process;
+extern struct job jobs[MAXJOBS];
+extern struct job * fg_job;
 
 int parseline(char *);
 

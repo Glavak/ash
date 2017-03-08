@@ -16,9 +16,10 @@
 // #define DEBUG
 
 char * infile, * outfile, * appfile;
+struct job jobs[MAXJOBS];
 struct command cmds[MAXCMDS];
 char bkgrnd;
-int signal_to_stop_process; // -1 - not stop process, signo otherwise
+struct job * fg_job;
 
 void write_prompt()
 {
@@ -32,22 +33,40 @@ void write_prompt()
 
 void sig_handler(int signo)
 {
-    if (signo == SIGINT || signo == SIGQUIT)
+    if(fg_job == NULL) return;
+
+    if (signo == SIGTSTP)
     {
-        signal_to_stop_process = signo;
+        kill(fg_job->pid, SIGSTOP);
+
+        fg_job->isStopped = 1;
+        printf("[%d] %d\n", fg_job->index, fg_job->pid);
+    }
+    else
+    {
+        kill(fg_job->pid, signo);
     }
 }
 
 int main(int argc, char * argv[])
 {
-    int i;
     char line[1024];  /*  allow large command lines  */
 
     if (signal(SIGINT, sig_handler) == SIG_ERR ||
-        signal(SIGQUIT, sig_handler) == SIG_ERR)
+        signal(SIGQUIT, sig_handler) == SIG_ERR ||
+        signal(SIGTSTP, sig_handler) == SIG_ERR)
     {
         printf("Can't catch signal");
     }
+
+    for (int i = 0; i < MAXJOBS; ++i)
+    {
+        jobs[i].index = i;
+        jobs[i].pid = -1;
+        jobs[i].isStopped = 0;
+    }
+
+    fg_job = NULL;
 
     while (1)
     {
@@ -81,7 +100,7 @@ int main(int argc, char * argv[])
 
         int pipe_ends[2];
 
-        for (i = 0; i < commands_count; i++)
+        for (int i = 0; i < commands_count; i++)
         {
             char * input_file = NULL;
             char * output_file = NULL;

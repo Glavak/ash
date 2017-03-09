@@ -9,6 +9,9 @@
 #define MAXCMDS 50
 #define MAXJOBS 128
 
+#include <wait.h>
+#include <fcntl.h>
+
 struct command
 {
     char * arguments[MAXARGS];
@@ -20,21 +23,10 @@ struct job
 {
     int index;
     int pid;
-    int isStopped;
+    int status;
 };
 
-//void print_job(struct job job)
-//{
-//    if (WIFEXITED(job.status))
-//    {
-//        printf("Done. Status: %d\n", WEXITSTATUS(job.status));
-//    }
-//    else if (WIFSTOPPED(job.status))
-//    {
-//        printf("Stopped.\n");
-//        jobs[i].isStopped = 1;
-//    }
-//}
+void print_job_status(struct job * job);
 
 extern struct command cmds[];
 extern char * infile, * outfile, * appfile;

@@ -21,6 +21,30 @@ struct command cmds[MAXCMDS];
 char bkgrnd;
 struct job * fg_job;
 
+void print_job_status(struct job * job)
+{
+    printf("[%d] %d ", job->index, job->pid);
+
+    if (WIFEXITED(job->status))
+    {
+        printf("Done. Exit code: %d\n", WEXITSTATUS(job->status));
+        job->pid = -1;
+    }
+    else if (WIFSTOPPED(job->status))
+    {
+        printf("Stopped.\n");
+    }
+    else if (WIFSIGNALED(job->status))
+    {
+        printf("Signaled. Signal: %d\n", WTERMSIG(job->status));
+        job->pid = -1;
+    }
+    else
+    {
+        printf("Running.\n");
+    }
+}
+
 void write_prompt()
 {
     char shell_prompt[64];
@@ -33,14 +57,11 @@ void write_prompt()
 
 void sig_handler(int signo)
 {
-    if(fg_job == NULL) return;
+    if (fg_job == NULL) return;
 
     if (signo == SIGTSTP)
     {
         kill(fg_job->pid, SIGSTOP);
-
-        fg_job->isStopped = 1;
-        printf("[%d] %d\n", fg_job->index, fg_job->pid);
     }
     else
     {
@@ -63,7 +84,7 @@ int main(int argc, char * argv[])
     {
         jobs[i].index = i;
         jobs[i].pid = -1;
-        jobs[i].isStopped = 0;
+        jobs[i].status = 0;
     }
 
     fg_job = NULL;
@@ -145,11 +166,6 @@ int main(int argc, char * argv[])
 //                printf("DBG: Close %d & %d", in_pipe, in_pipe_other_end);
                 close(in_pipe);
                 close(in_pipe_other_end);
-            }
-
-            if (errcode != 0)
-            {
-                printf("ash: process \"%s\" exited with error code %d\n", cmds[i].arguments[0], errcode);
             }
         }
     }

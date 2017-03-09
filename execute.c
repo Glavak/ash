@@ -73,11 +73,6 @@ int execute_command(char ** args,
             signal(SIGQUIT, SIG_DFL);
             signal(SIGTSTP, SIG_DFL);
 
-            /*if (isatty(0)) tcsetpgrp(0, pid);
-            if (isatty(1)) tcsetpgrp(1, pid);
-            if (isatty(2)) */
-            //tcsetpgrp(STDIN_FILENO, pid);
-
             execvp(args[0], args);
 
             // If we're here, execvp failed
@@ -100,7 +95,7 @@ int execute_command(char ** args,
             }
 
             jobs[jobNum].pid = pid;
-            jobs[jobNum].isStopped = 0;
+            jobs[jobNum].status = 0;
             if (in_background)
             {
                 printf("[%d] %d\n", jobNum, pid);
@@ -118,53 +113,29 @@ void print_jobs()
 {
     for (int i = 0; i < MAXJOBS; ++i)
     {
-        if (jobs[i].pid > 0)
-        {
-            printf("[%d] %d ", i, jobs[i].pid);
+        if (jobs[i].pid <= 0) continue;
 
-            int status;
-            int ret = waitpid(jobs[i].pid, &status, WNOHANG | WUNTRACED);
-            if (ret == 0)
-            {
-                if (jobs[i].isStopped)
-                {
-                    printf("Stopped.\n");
-                }
-                else
-                {
-                    printf("Running.\n");
-                }
-            }
-            else if (ret != jobs[i].pid)
-            {
-                perror("waitpid");
-            }
-            else if (WIFEXITED(status))
-            {
-                printf("Done. Status: %d\n", WEXITSTATUS(status));
-                jobs[i].pid = -1;
-            }
-            else if (jobs[i].isStopped || WIFSTOPPED(status))
-            {
-                printf("Stopped.\n");
-                jobs[i].isStopped = 1;
-            }
-            else if (WIFSIGNALED(status))
-            {
-                printf("Signaled. Signal: %d\n", WTERMSIG(status));
-                jobs[i].pid = -1;
-            }
-            else
-            {
-                printf("Running.\n");
-            }
+        int status;
+        int ret = waitpid(jobs[i].pid, &status, WNOHANG | WUNTRACED);
+        if (ret == 0)
+        {
+            // State haven't changed
+            print_job_status(&jobs[i]);
+        }
+        else if (ret != jobs[i].pid)
+        {
+            perror("waitpid");
+        }
+        else
+        {
+            jobs[i].status = status;
+            print_job_status(&jobs[i]);
         }
     }
 }
 
 void background_process(struct job * job)
 {
-    job->isStopped = 0;
     kill(job->pid, SIGCONT);
 }
 
@@ -177,41 +148,23 @@ int foreground_process(struct job * job)
 
     fg_job = job;
 
-    if (job->isStopped)
+    if (WIFSTOPPED(job->status))
     {
-        job->isStopped = 0;
         kill(job->pid, SIGCONT);
     }
 
-    int status;
-    waitpid(job->pid, &status, WUNTRACED);
+    waitpid(job->pid, &job->status , WUNTRACED);
 
-    if (WIFEXITED(status))
+    print_job_status(job);
+
+    fg_job = NULL;
+
+    if (WIFEXITED(job->status))
     {
-        printf("WIFEXITED triggered\n");
-        job->pid = -1;
-        return WEXITSTATUS(status);
-    }
-    else if (WIFSTOPPED(status))
-    {
-        // Child process suspended with Ctrl-Z
-        printf("WIFSTOPPED triggered\n");
-        job->isStopped = 1;
-        fg_job = NULL;
-        return 0;
-    }
-    else if (WIFSIGNALED(status))
-    {
-        printf("WIFSIGNALED triggered\n");
-        job->pid = -1;
-        fg_job = NULL;
-        return 0;
+        return WEXITSTATUS(job->status);
     }
     else
     {
-        printf("smth weird triggered\n");
-        job->pid = -1;
-        fg_job = NULL;
         return 0;
     }
 }

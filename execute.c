@@ -106,7 +106,7 @@ void print_jobs()
         if (jobs[i].pid <= 0) continue;
 
         int status;
-        int ret = waitpid(jobs[i].pid, &status, WNOHANG | WUNTRACED);
+        int ret = waitpid(jobs[i].pid, &status, WNOHANG | WUNTRACED | WCONTINUED);
         if (ret == 0)
         {
             // State haven't changed

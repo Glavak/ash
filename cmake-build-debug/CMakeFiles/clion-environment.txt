@@ -1,0 +1,1 @@
+CMake: 3.6.3@/home/glavak/CLion/bin/cmake/bin/cmake

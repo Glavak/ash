@@ -9,12 +9,14 @@ int execute_command(char ** args,
                     char in_background,
                     char * infile, char * outfile, char * appfile,
                     int in_pipe, int out_pipe,
-                    int in_pipe_other_end, int out_pipe_other_end);
+                    int in_pipe_other_end, int out_pipe_other_end,
+                    int job_id);
 
 int execute_command_or_builtin(char ** args,
                                char in_background,
                                char * infile, char * outfile, char * appfile,
                                int in_pipe, int out_pipe,
-                               int in_pipe_other_end, int out_pipe_other_end);
+                               int in_pipe_other_end, int out_pipe_other_end,
+                               int job_id);
 
 #endif //ASH_EXECUTE_H

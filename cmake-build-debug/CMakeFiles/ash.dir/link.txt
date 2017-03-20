@@ -1,0 +1,1 @@
+/usr/bin/cc  -g   CMakeFiles/ash.dir/shell.c.o CMakeFiles/ash.dir/parseline.c.o CMakeFiles/ash.dir/promptline.c.o CMakeFiles/ash.dir/execute.c.o  -o ../bin/ash 

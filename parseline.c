@@ -20,6 +20,7 @@ int parseline(char * line)
     char aflg = 0;
     int rval;
     int i;
+    int is_in_string_mode = 0;
     static char delim[] = " \t|&<>;\n";
 
     /* initialize  */
@@ -41,13 +42,24 @@ int parseline(char * line)
         /*  handle <, >, |, &, and ;  */
         switch (*s)
         {
-            case '&':++bkgrnd;
+            case '"':cmds[ncmds].arguments[nargs] = s + 1;
+                nargs++;
+                cmds[ncmds].arguments[nargs] = (char *) NULL;
+                do
+                {
+                    (*s)++;
+                }
+                while (*s != '"');
+                *s = '\0';
+                (*s)++;
+                break;
+            case '&':bkgrnd = 1;
                 *s++ = '\0';
                 break;
             case '>':
                 if (*(s + 1) == '>')
                 {
-                    ++aflg;
+                    aflg = 1;
                     *s++ = '\0';
                 }
                 *s++ = '\0';
@@ -77,7 +89,7 @@ int parseline(char * line)
                 if (!*s)
                 {
                     fprintf(stderr, "syntax error\n");
-                    return (-1);
+                    return -1;
                 }
                 infile = s;
                 s = strpbrk(s, delim);
@@ -107,7 +119,8 @@ int parseline(char * line)
                 { /* next command */
                     rval = ncmds + 1;
                 }
-                cmds[ncmds].arguments[nargs++] = s;
+                cmds[ncmds].arguments[nargs] = s;
+                nargs++;
                 cmds[ncmds].arguments[nargs] = (char *) NULL;
                 s = strpbrk(s, delim);
                 if (isspace(*s))

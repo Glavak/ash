@@ -18,7 +18,8 @@ int execute_command(char ** args,
                     char in_background,
                     char * infile, char * outfile, char * appfile,
                     int in_pipe, int out_pipe,
-                    int in_pipe_other_end, int out_pipe_other_end)
+                    int in_pipe_other_end, int out_pipe_other_end,
+                    int job_id)
 {
     // Fork process:
     pid_t pid = fork();
@@ -67,7 +68,7 @@ int execute_command(char ** args,
             }
 
             pid = getpid();
-            setpgid(pid, pid);
+            setpgid(pid, 0);
 
             signal(SIGINT, SIG_DFL);
             signal(SIGQUIT, SIG_DFL);
@@ -84,26 +85,15 @@ int execute_command(char ** args,
             // Parent process
             setpgid(pid, 0);
 
-            int jobNum = -1;
-            for (int i = 0; i < MAXJOBS; ++i)
-            {
-                if (jobs[i].pid < 0)
-                {
-                    jobNum = i;
-                    break;
-                }
-            }
-
-            jobs[jobNum].pid = pid;
-            jobs[jobNum].status = 0;
+            jobs[job_id].pid = pid;
             if (in_background)
             {
-                printf("[%d] %d\n", jobNum, pid);
+                printf("[%d] %d\n", job_id, pid);
                 return 0;
             }
             else
             {
-                return foreground_process(&jobs[jobNum]);
+                return foreground_process(&jobs[job_id]);
             }
         }
     }
@@ -136,28 +126,32 @@ void print_jobs()
 
 void background_process(struct job * job)
 {
+    tcsetattr(shell_terminal, TCSADRAIN, &job->tmodes);
     kill(job->pid, SIGCONT);
 }
 
 int foreground_process(struct job * job)
 {
-    /*
-    printf("\n\nErrno = %d\n\n", errno);
-    printf("\n\nNew pgid = %d\n\n", getpgid(pid));
-    printf("\n\nMy pid = %d\n\n", getpid());*/
-
     fg_job = job;
+    tcsetpgrp(shell_terminal, getpgid(job->pid));
 
     if (WIFSTOPPED(job->status))
     {
         kill(job->pid, SIGCONT);
     }
 
-    waitpid(job->pid, &job->status , WUNTRACED);
-
-    print_job_status(job);
+    waitpid(job->pid, &job->status, WUNTRACED);
 
     fg_job = NULL;
+
+    // Put the shell back in the foreground
+    tcsetpgrp(shell_terminal, getpgrp());
+
+    // Restore the shell’s terminal modes
+    tcgetattr(shell_terminal, &job->tmodes);
+    tcsetattr(shell_terminal, TCSADRAIN, &shell_tmodes);
+
+    print_job_status(job);
 
     if (WIFEXITED(job->status))
     {
@@ -174,7 +168,8 @@ execute_command_or_builtin(char ** args,
                            char in_background,
                            char * infile, char * outfile, char * appfile,
                            int in_pipe, int out_pipe,
-                           int in_pipe_other_end, int out_pipe_other_end)
+                           int in_pipe_other_end, int out_pipe_other_end,
+                           int job_id)
 {
     if (strcmp(args[0], "cd") == 0)
     {
@@ -191,16 +186,30 @@ execute_command_or_builtin(char ** args,
     }
     else if (strcmp(args[0], "fg") == 0)
     {
-        int job_id;
-        sscanf(args[1], "%d", &job_id);
-        foreground_process(&jobs[job_id]);
+        int job_argument;
+        if (args[1] == NULL)
+        {
+            job_argument = 0;
+        }
+        else
+        {
+            sscanf(args[1], "%d", &job_argument);
+        }
+        foreground_process(&jobs[job_argument]);
         return 0;
     }
     else if (strcmp(args[0], "bg") == 0)
     {
-        int job_id;
-        sscanf(args[1], "%d", &job_id);
-        background_process(&jobs[job_id]);
+        int job_argument;
+        if (args[1] == NULL)
+        {
+            job_argument = 0;
+        }
+        else
+        {
+            sscanf(args[1], "%d", &job_argument);
+        }
+        background_process(&jobs[job_argument]);
         return 0;
     }
     else
@@ -208,6 +217,7 @@ execute_command_or_builtin(char ** args,
         return execute_command(args, in_background,
                                infile, outfile, appfile,
                                in_pipe, out_pipe,
-                               in_pipe_other_end, out_pipe_other_end);
+                               in_pipe_other_end, out_pipe_other_end,
+                               job_id);
     }
 }

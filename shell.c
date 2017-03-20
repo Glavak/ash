@@ -9,6 +9,7 @@
 #include <stdlib.h>
 
 #include <unistd.h>
+#include <termio.h>
 
 #include "shell.h"
 #include "execute.h"
@@ -20,6 +21,8 @@ struct job jobs[MAXJOBS];
 struct command cmds[MAXCMDS];
 char bkgrnd;
 struct job * fg_job;
+int shell_terminal;
+struct termios shell_tmodes;
 
 void print_job_status(struct job * job)
 {
@@ -48,9 +51,11 @@ void print_job_status(struct job * job)
 void write_prompt()
 {
     char shell_prompt[64];
+    char path[64];
 
-    getcwd(shell_prompt, sizeof(shell_prompt) - 3);
-    strcat(shell_prompt, "$ ");
+    getcwd(path, sizeof(path));
+
+    sprintf(shell_prompt, "\x1b[01;36m%s\x1b[01;31m$\x1b[0m ", path);
 
     write(STDOUT_FILENO, shell_prompt, strlen(shell_prompt));
 }
@@ -75,7 +80,9 @@ int main(int argc, char * argv[])
 
     if (signal(SIGINT, sig_handler) == SIG_ERR ||
         signal(SIGQUIT, sig_handler) == SIG_ERR ||
-        signal(SIGTSTP, sig_handler) == SIG_ERR)
+        signal(SIGTSTP, sig_handler) == SIG_ERR ||
+        signal(SIGTTIN, SIG_IGN) == SIG_ERR ||
+        signal(SIGTTOU, SIG_IGN) == SIG_ERR)
     {
         printf("Can't catch signal");
     }
@@ -88,6 +95,16 @@ int main(int argc, char * argv[])
     }
 
     fg_job = NULL;
+    shell_terminal = STDIN_FILENO;
+
+    int my_pid = getpid();
+    setpgid(my_pid, my_pid);
+
+    // Grab control of the terminal
+    tcsetpgrp(shell_terminal, getpgrp());
+
+    // Save default terminal attributes for shell
+    tcgetattr(shell_terminal, &shell_tmodes);
 
     while (1)
     {
@@ -119,8 +136,21 @@ int main(int argc, char * argv[])
         }
 #endif
 
-        int pipe_ends[2];
+        // Find free job slot
+        int jobNum = -1;
+        for (int i = 0; i < MAXJOBS; ++i)
+        {
+            if (jobs[i].pid < 0)
+            {
+                jobNum = i;
+                break;
+            }
+        }
+        //jobs[jobNum].pid = 0; //TODO
+        jobs[jobNum].status = 0;
+        jobs[jobNum].tmodes = shell_tmodes;
 
+        int pipe_ends[2];
         for (int i = 0; i < commands_count; i++)
         {
             char * input_file = NULL;
@@ -159,7 +189,8 @@ int main(int argc, char * argv[])
                                                      bkgrnd,
                                                      input_file, output_file, append_file,
                                                      in_pipe, out_pipe,
-                                                     in_pipe_other_end, out_pipe_other_end);
+                                                     in_pipe_other_end, out_pipe_other_end,
+                                                     jobNum);
 
             if (in_pipe >= 0)
             {

@@ -1,0 +1,3 @@
+/home/glavak/ClionProjects/ash/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/glavak/ClionProjects/ash/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/glavak/ClionProjects/ash/cmake-build-debug/CMakeFiles/ash.dir

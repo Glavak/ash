@@ -11,6 +11,7 @@
 
 #include <wait.h>
 #include <fcntl.h>
+#include <termio.h>
 
 struct command
 {
@@ -24,6 +25,7 @@ struct job
     int index;
     int pid;
     int status;
+    struct termios tmodes;
 };
 
 void print_job_status(struct job * job);
@@ -33,6 +35,8 @@ extern char * infile, * outfile, * appfile;
 extern char bkgrnd;
 extern struct job jobs[MAXJOBS];
 extern struct job * fg_job;
+extern int shell_terminal;
+extern struct termios shell_tmodes;
 
 int parseline(char *);
 

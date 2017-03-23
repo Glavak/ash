@@ -21,6 +21,15 @@ int execute_command(char ** args,
                     int in_pipe_other_end, int out_pipe_other_end,
                     int job_id)
 {
+    // Find free process slot in job
+    int pid_index = 0;
+    while (jobs[job_id].pids[pid_index] > 0)
+    {
+        pid_index++;
+    }
+    int pgid_to_set = 0;
+    if (pid_index > 0) pgid_to_set = jobs[job_id].pids[0];
+
     // Fork process:
     pid_t pid = fork();
 
@@ -29,72 +38,78 @@ int execute_command(char ** args,
         perror("ash: forking");
         return 1;
     }
+
+    // Here we have two processes executing this line of code
+    if (pid == 0)
+    {
+        // Child process
+        if (infile != NULL)
+        {
+            int fr = open(infile, O_RDONLY);
+            dup2(fr, STDIN_FILENO);
+        }
+        if (outfile != NULL)
+        {
+            int access_mode =
+                    S_IRUSR | S_IRGRP | S_IROTH |
+                    S_IWUSR | S_IWGRP;
+            int fw = open(outfile, O_WRONLY | O_CREAT, access_mode);
+            dup2(fw, STDOUT_FILENO);
+        }
+        if (appfile != NULL)
+        {
+            int fw = open(appfile, O_WRONLY | O_APPEND);
+            dup2(fw, STDOUT_FILENO);
+        }
+
+        if (in_pipe >= 0)
+        {
+            dup2(in_pipe, STDIN_FILENO);
+            close(in_pipe);
+            close(in_pipe_other_end);
+        }
+        if (out_pipe >= 0)
+        {
+            dup2(out_pipe, STDOUT_FILENO);
+            close(out_pipe);
+            close(out_pipe_other_end);
+        }
+
+        pid = getpid();
+        setpgid(pid, pgid_to_set);
+
+        signal(SIGINT, SIG_DFL);
+        signal(SIGQUIT, SIG_DFL);
+        signal(SIGTSTP, SIG_DFL);
+
+        execvp(args[0], args);
+
+        // If we're here, execvp failed
+        perror("asd: executing child process");
+        exit(1);
+    }
     else
     {
-        // Here we have two processes executing this line of code
-        if (pid == 0)
+        // Parent process
+        setpgid(pid, pgid_to_set);
+
+        if (in_pipe >= 0)
         {
-            // Child process
-            if (infile != NULL)
-            {
-                int fr = open(infile, O_RDONLY);
-                dup2(fr, STDIN_FILENO);
-            }
-            if (outfile != NULL)
-            {
-                int access_mode =
-                        S_IRUSR | S_IRGRP | S_IROTH |
-                        S_IWUSR | S_IWGRP;
-                int fw = open(outfile, O_WRONLY | O_CREAT, access_mode);
-                dup2(fw, STDOUT_FILENO);
-            }
-            if (appfile != NULL)
-            {
-                int fw = open(appfile, O_WRONLY | O_APPEND);
-                dup2(fw, STDOUT_FILENO);
-            }
-
-            if (in_pipe >= 0)
-            {
-                dup2(in_pipe, STDIN_FILENO);
-                close(in_pipe);
-                close(in_pipe_other_end);
-            }
-            if (out_pipe >= 0)
-            {
-                dup2(out_pipe, STDOUT_FILENO);
-                close(out_pipe);
-                close(out_pipe_other_end);
-            }
-
-            pid = getpid();
-            setpgid(pid, 0);
-
-            signal(SIGINT, SIG_DFL);
-            signal(SIGQUIT, SIG_DFL);
-            signal(SIGTSTP, SIG_DFL);
-
-            execvp(args[0], args);
-
-            // If we're here, execvp failed
-            perror("asd: executing child process");
-            exit(1);
+            close(in_pipe);
+            close(in_pipe_other_end);
         }
-        else
-        {
-            // Parent process
-            setpgid(pid, 0);
 
-            jobs[job_id].pid = pid;
-            if (in_background)
-            {
-                printf("[%d] %d\n", job_id, pid);
-                return 0;
-            }
-            else
-            {
-                return foreground_process(&jobs[job_id]);
-            }
+        jobs[job_id].pids[pid_index] = pid;
+        jobs[job_id].pids[pid_index + 1] = -1;
+        if (in_background)
+        {
+            printf("[%d] %d\n", job_id, pid);
+            return 0;
+        }
+        else if (out_pipe < 0)
+        {
+            // For last process in pipe
+            return foreground_process(&jobs[job_id]);
         }
     }
 }
@@ -103,16 +118,16 @@ void print_jobs()
 {
     for (int i = 0; i < MAXJOBS; ++i)
     {
-        if (jobs[i].pid <= 0) continue;
+        if (jobs[i].pids[0] <= 0) continue;
 
         int status;
-        int ret = waitpid(jobs[i].pid, &status, WNOHANG | WUNTRACED | WCONTINUED);
+        int ret = waitpid(jobs[i].pids[0], &status, WNOHANG | WUNTRACED | WCONTINUED);
         if (ret == 0)
         {
             // State haven't changed
             print_job_status(&jobs[i]);
         }
-        else if (ret != jobs[i].pid)
+        else if (ret != jobs[i].pids[0])
         {
             perror("waitpid");
         }
@@ -126,21 +141,26 @@ void print_jobs()
 
 void background_process(struct job * job)
 {
-    tcsetattr(shell_terminal, TCSADRAIN, &job->tmodes);
-    kill(job->pid, SIGCONT);
+    kill_job(job, SIGCONT);
 }
 
 int foreground_process(struct job * job)
 {
-    fg_job = job;
-    tcsetpgrp(shell_terminal, getpgid(job->pid));
-
     if (WIFSTOPPED(job->status))
     {
-        kill(job->pid, SIGCONT);
+        kill_job(job, SIGCONT);
     }
 
-    waitpid(job->pid, &job->status, WUNTRACED);
+    fg_job = job;
+    tcsetpgrp(shell_terminal, getpgid(job->pids[0]));
+    tcsetattr(shell_terminal, TCSADRAIN, &job->tmodes);
+
+    int pid_index = 0;
+    while (job->pids[pid_index] > 0)
+    {
+        waitpid(job->pids[pid_index], &job->status, WUNTRACED);
+        pid_index++;
+    }
 
     fg_job = NULL;
 

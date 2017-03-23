@@ -23,7 +23,7 @@ struct command
 struct job
 {
     int index;
-    int pid;
+    int pids[128];
     int status;
     struct termios tmodes;
 };
@@ -39,6 +39,7 @@ extern int shell_terminal;
 extern struct termios shell_tmodes;
 
 int parseline(char *);
+void kill_job(struct job * job, int sig);
 
 size_t promptline(char *, size_t);
 

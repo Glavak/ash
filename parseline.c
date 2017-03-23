@@ -47,11 +47,11 @@ int parseline(char * line)
                 cmds[ncmds].arguments[nargs] = (char *) NULL;
                 do
                 {
-                    (*s)++;
+                    s++;
                 }
                 while (*s != '"');
                 *s = '\0';
-                (*s)++;
+                s++;
                 break;
             case '&':bkgrnd = 1;
                 *s++ = '\0';

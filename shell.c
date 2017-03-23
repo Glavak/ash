@@ -26,12 +26,12 @@ struct termios shell_tmodes;
 
 void print_job_status(struct job * job)
 {
-    printf("[%d] %d ", job->index, job->pid);
+    printf("[%d] %d ", job->index, job->pids[0]);
 
     if (WIFEXITED(job->status))
     {
         printf("Done. Exit code: %d\n", WEXITSTATUS(job->status));
-        job->pid = -1;
+        job->pids[0] = -1;
     }
     else if (WIFSTOPPED(job->status))
     {
@@ -40,7 +40,7 @@ void print_job_status(struct job * job)
     else if (WIFSIGNALED(job->status))
     {
         printf("Signaled. Signal: %d\n", WTERMSIG(job->status));
-        job->pid = -1;
+        job->pids[0] = -1;
     }
     else
     {
@@ -60,17 +60,27 @@ void write_prompt()
     write(STDOUT_FILENO, shell_prompt, strlen(shell_prompt));
 }
 
+void kill_job(struct job * job, int sig)
+{
+    int pid_index = 0;
+    while (job->pids[pid_index] > 0)
+    {
+        kill(job->pids[pid_index], sig);
+        pid_index++;
+    }
+}
+
 void sig_handler(int signo)
 {
     if (fg_job == NULL) return;
 
     if (signo == SIGTSTP)
     {
-        kill(fg_job->pid, SIGSTOP);
+        kill_job(fg_job, SIGSTOP);
     }
     else
     {
-        kill(fg_job->pid, signo);
+        kill_job(fg_job, signo);
     }
 }
 
@@ -90,7 +100,7 @@ int main(int argc, char * argv[])
     for (int i = 0; i < MAXJOBS; ++i)
     {
         jobs[i].index = i;
-        jobs[i].pid = -1;
+        jobs[i].pids[0] = -1;
         jobs[i].status = 0;
     }
 
@@ -140,13 +150,12 @@ int main(int argc, char * argv[])
         int jobNum = -1;
         for (int i = 0; i < MAXJOBS; ++i)
         {
-            if (jobs[i].pid < 0)
+            if (jobs[i].pids[0] < 0)
             {
                 jobNum = i;
                 break;
             }
         }
-        //jobs[jobNum].pid = 0; //TODO
         jobs[jobNum].status = 0;
         jobs[jobNum].tmodes = shell_tmodes;
 
@@ -191,13 +200,6 @@ int main(int argc, char * argv[])
                                                      in_pipe, out_pipe,
                                                      in_pipe_other_end, out_pipe_other_end,
                                                      jobNum);
-
-            if (in_pipe >= 0)
-            {
-//                printf("DBG: Close %d & %d", in_pipe, in_pipe_other_end);
-                close(in_pipe);
-                close(in_pipe_other_end);
-            }
         }
     }
 }
